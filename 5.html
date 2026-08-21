@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام إدارة نقطة البيع - التطوير الذكي للمدفوعات</title>
+    <!-- استدعاء Tailwind CSS للتصميم -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- استدعاء خط عربي أنيق (Cairo) -->
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Cairo', sans-serif; }
+        @media print {
+            .no-print { display: none !important; }
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 p-4 md:p-8 min-h-screen">
+
+    <div class="max-w-7xl mx-auto bg-slate-800 border border-slate-700 p-6 md:p-8 rounded-3xl shadow-2xl">
+        
+        <!-- رأس الصفحة والعنوان -->
+        <div class="flex flex-col md:flex-row justify-between items-center mb-8 border-b border-slate-700 pb-5">
+            <div>
+                <h2 class="text-3xl font-black text-white flex items-center gap-2">
+                    <span class="bg-blue-600 text-white p-2 rounded-xl text-xl">⚡</span> نظام نقطة البيع (إدارة المدفوعات المتقدمة)
+                </h2>
+                <p class="text-slate-400 text-sm mt-1">لوحة تحكم ذكية لإدارة المبيعات والمدفوعات والتحقق الآلي من الحوالات (10 أرقام)</p>
+            </div>
+            <div class="mt-4 md:mt-0 flex gap-2 no-print">
+                <button onclick="printReport()" class="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition shadow flex items-center gap-1.5">
+                    🖨️ طباعة التقرير
+                </button>
+                <button onclick="exportToExcel()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition shadow flex items-center gap-1.5">
+                    📊 تصدير Excel
+                </button>
+            </div>
+        </div>
+
+        <!-- رسالة التنبيه المنبثقة (Toast) -->
+        <div id="toast" class="fixed top-5 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white px-6 py-3 rounded-2xl shadow-2xl hidden transition-all duration-300 z-50 text-sm font-bold border border-blue-400">
+            تمت العملية بنجاح!
+        </div>
+
+        <!-- لوحة الإحصائيات الفورية -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+            <div class="bg-slate-700/50 border border-slate-700 p-4 rounded-2xl shadow-lg relative overflow-hidden">
+                <p class="text-slate-400 text-xs font-semibold">إجمالي المبيعات المحصلة</p>
+                <p id="totalRevenue" class="text-xl font-black text-emerald-400 mt-1">0 شيكل</p>
+            </div>
+            <div class="bg-slate-700/50 border border-slate-700 p-4 rounded-2xl shadow-lg relative overflow-hidden">
+                <p class="text-slate-400 text-xs font-semibold">المبالغ غير المدفوعة (ديون)</p>
+                <p id="totalDebt" class="text-xl font-black text-amber-400 mt-1">0 شيكل</p>
+            </div>
+            <div class="bg-slate-700/50 border border-slate-700 p-4 rounded-2xl shadow-lg relative overflow-hidden">
+                <p class="text-slate-400 text-xs font-semibold">إجمالي المستخدمين</p>
+                <p id="totalUsers" class="text-xl font-black text-blue-400 mt-1">0</p>
+            </div>
+            <div class="bg-slate-700/50 border border-slate-700 p-4 rounded-2xl shadow-lg relative overflow-hidden">
+                <p class="text-slate-400 text-xs font-semibold">الطلبات المستلمة</p>
+                <p id="receivedCount" class="text-xl font-black text-teal-400 mt-1">0</p>
+            </div>
+            <div class="bg-slate-700/50 border border-slate-700 p-4 rounded-2xl shadow-lg relative overflow-hidden">
+                <p class="text-slate-400 text-xs font-semibold">عمليات الدفع المؤكدة</p>
+                <p id="paidCount" class="text-xl font-black text-purple-400 mt-1">0</p>
+            </div>
+        </div>
+
+        <!-- شريط التقدم المالي -->
+        <div class="bg-slate-700/30 border border-slate-700 p-4 rounded-2xl mb-8 no-print">
+            <div class="flex justify-between items-center text-xs font-semibold text-slate-300 mb-2">
+                <span>نسبة التحصيل المالي الإجمالي</span>
+                <span id="collectionRate">0%</span>
+            </div>
+            <div class="w-full bg-slate-700 h-3 rounded-full overflow-hidden">
+                <div id="progressBar" class="bg-gradient-to-r from-emerald-500 to-teal-400 h-full transition-all duration-500" style="width: 0%"></div>
+            </div>
+        </div>
+
+        <!-- نموذج الإضافة والتعديل -->
+        <div class="bg-slate-700/40 border border-slate-700 p-6 rounded-3xl mb-8 shadow-inner no-print">
+            <h3 id="formTitle" class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                <span>➕</span> إضافة مستخدم جديد للنظام
+            </h3>
+            <input type="hidden" id="editIndex" value="-1">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-3 mb-4">
+                <input type="text" id="name" placeholder="الاسم الكامل" class="bg-slate-800 border border-slate-600 text-white placeholder-slate-400 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none">
+                
+                <!-- حقل عدد شواحن الجوال (0 إلى 100) -->
+                <input type="number" id="chargerCount" min="0" max="100" placeholder="شاحن الجوال (0-100)" class="bg-slate-800 border border-slate-600 text-white placeholder-slate-400 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none">
+
+                <!-- حقل المدفوع المطور -->
+                <select id="paid" onchange="handlePaidChange()" class="bg-slate-800 border border-slate-600 text-white p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-bold">
+                    <option value="لا">تم الدفع: ❌ لا (دين)</option>
+                    <option value="نعم">تم الدفع: ✅ نعم (مدفوع)</option>
+                </select>
+
+                <input type="text" id="transferNo" maxlength="10" placeholder="رقم التحويل (10 أرقام)" class="bg-slate-800 border border-slate-600 text-white placeholder-slate-400 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" oninput="this.value = this.value.replace(/[^0-9]/g, '')">
+
+                <select id="received" class="bg-slate-800 border border-slate-600 text-white p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none">
+                    <option value="لم يستلم">حالة الاستلام: لم يستلم</option>
+                    <option value="استلم">حالة الاستلام: استلم</option>
+                </select>
+
+                <select id="paymentType" class="bg-slate-800 border border-slate-600 text-white p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none">
+                    <option value="بال بي">بال بي</option>
+                    <option value="جوال بي">جوال بي</option>
+                    <option value="بنك فلسطين">بنك فلسطين</option>
+                    <option value="بنك إسلامي">بنك إسلامي</option>
+                    <option value="دين">دين</option>
+                </select>
+
+                <input type="number" id="price" placeholder="السعر (شيكل)" class="bg-slate-800 border border-slate-600 text-white placeholder-slate-400 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none">
+            </div>
+            <div class="flex gap-2">
+                <button onclick="saveUser()" id="submitBtn" class="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl font-bold transition shadow-lg">
+                    حفظ البيانات
+                </button>
+                <button onclick="resetForm()" id="cancelBtn" class="bg-slate-600 hover:bg-slate-500 text-white px-5 py-3 rounded-xl font-bold transition hidden">
+                    إلغاء التعديل
+                </button>
+            </div>
+        </div>
+
+        <!-- أدوات البحث والتصفية المتقدمة -->
+        <div class="flex flex-col gap-4 mb-6 no-print">
+            <div class="flex flex-col md:flex-row justify-between items-center gap-4">
+                <div class="w-full md:w-1/3">
+                    <input type="text" id="searchInput" placeholder="🔍 ابحث عن اسم أو رقم تحويل..." class="bg-slate-800 border border-slate-600 text-white placeholder-slate-400 p-3 rounded-xl w-full focus:ring-2 focus:ring-blue-500 outline-none" onkeyup="filterTable()">
+                </div>
+                
+                <!-- أزرار الفلترة العامة -->
+                <div class="flex flex-wrap gap-2 w-full md:w-auto">
+                    <button onclick="setFilter('all')" class="filter-btn bg-blue-600 text-white px-3 py-2 rounded-xl text-xs font-bold transition shadow">الكل</button>
+                    <button onclick="setFilter('paid')" class="filter-btn bg-slate-800 text-slate-300 border border-slate-600 px-3 py-2 rounded-xl text-xs font-bold hover:bg-slate-700 transition">المدفوع</button>
+                    <button onclick="setFilter('debt')" class="filter-btn bg-slate-800 text-slate-300 border border-slate-600 px-3 py-2 rounded-xl text-xs font-bold hover:bg-slate-700 transition">الديون</button>
+                    <button onclick="setFilter('received')" class="filter-btn bg-slate-800 text-slate-300 border border-slate-600 px-3 py-2 rounded-xl text-xs font-bold hover:bg-slate-700 transition">المستلمين</button>
+                    <button onclick="setFilter('not_received')" class="filter-btn bg-slate-800 text-slate-300 border border-slate-600 px-3 py-2 rounded-xl text-xs font-bold hover:bg-slate-700 transition">لم يستلموا</button>
+                    <button onclick="clearAllData()" class="bg-rose-900/40 text-rose-300 border border-rose-700/50 px-3 py-2 rounded-xl text-xs font-bold hover:bg-rose-900/70 transition ml-auto">حذف الكل ⚠️</button>
+                </div>
+            </div>
+
+            <!-- أزرار الفلترة حسب طريقة الدفع -->
+            <div class="flex flex-wrap gap-2 items-center bg-slate-700/20 p-3 rounded-xl border border-slate-700">
+                <span class="text-xs text-slate-400 font-bold ml-2">فلترة بطريقة الدفع:</span>
+                <button onclick="setPaymentFilter('الكل')" class="pay-filter-btn bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition">جميع الطرق</button>
+                <button onclick="setPaymentFilter('بال بي')" class="pay-filter-btn bg-slate-800 text-slate-300 border border-slate-600 px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-slate-700 transition">بال بي</button>
+                <button onclick="setPaymentFilter('جوال بي')" class="pay-filter-btn bg-slate-800 text-slate-300 border border-slate-600 px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-slate-700 transition">جوال بي</button>
+                <button onclick="setPaymentFilter('بنك فلسطين')" class="pay-filter-btn bg-slate-800 text-slate-300 border border-slate-600 px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-slate-700 transition">بنك فلسطين</button>
+                <button onclick="setPaymentFilter('بنك إسلامي')" class="pay-filter-btn bg-slate-800 text-slate-300 border border-slate-600 px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-slate-700 transition">بنك إسلامي</button>
+                <button onclick="setPaymentFilter('دين')" class="pay-filter-btn bg-slate-800 text-slate-300 border border-slate-600 px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-slate-700 transition">دين</button>
+            </div>
+        </div>
+
+        <!-- جدول البيانات -->
+        <div class="overflow-x-auto border border-slate-700 rounded-2xl shadow-sm bg-slate-800">
+            <table class="w-full border-collapse text-right" id="userTable">
+                <thead class="bg-slate-700 text-slate-300 text-sm">
+                    <tr>
+                        <th class="p-4 border-b border-slate-600">الاسم الكامل</th>
+                        <th class="p-4 border-b border-slate-600">شاحن الجوال</th>
+                        <th class="p-4 border-b border-slate-600">حالة المدفوع</th>
+                        <th class="p-4 border-b border-slate-600">رقم التحويل (10 أرقام)</th>
+                        <th class="p-4 border-b border-slate-600">حالة الاستلام</th>
+                        <th class="p-4 border-b border-slate-600">نوع الدفع</th>
+                        <th class="p-4 border-b border-slate-600">السعر</th>
+                        <th class="p-4 border-b border-slate-600 text-center no-print">إجراءات الدفع والاستلام</th>
+                        <th class="p-4 border-b border-slate-600 text-center no-print">إدارة</th>
+                    </tr>
+                </thead>
+                <tbody id="userBody" class="divide-y divide-slate-700 text-sm text-slate-200">
+                    <!-- البيانات ستدرج هنا ديناميكياً -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        let users = JSON.parse(localStorage.getItem('pos_users_v9')) || [];
+        let currentFilter = 'all';
+        let currentPaymentFilter = 'الكل';
+
+        window.onload = function() {
+            renderTable();
+        };
+
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            toast.innerText = message;
+            toast.classList.remove('hidden');
+            setTimeout(() => {
+                toast.classList.add('hidden');
+            }, 2500);
+        }
+
+        // دالة تفاعلية عند تغيير حالة المدفوع في النموذج
+        function handlePaidChange() {
+            const paidVal = document.getElementById('paid').value;
+            const transferInput = document.getElementById('transferNo');
+            if (paidVal === 'نعم') {
+                transferInput.placeholder = "رقم التحويل (إجباري 10 أرقام)";
+                transferInput.classList.add('border-emerald-500');
+            } else {
+                transferInput.placeholder = "رقم التحويل (اختياري للديون)";
+                transferInput.classList.remove('border-emerald-500');
+            }
+        }
+
+        function saveUser() {
+            const editIndex = parseInt(document.getElementById('editIndex').value);
+            const name = document.getElementById('name').value.trim();
+            const price = parseFloat(document.getElementById('price').value);
+            const transferNo = document.getElementById('transferNo').value.trim();
+            const paid = document.getElementById('paid').value;
+            let chargerCount = parseInt(document.getElementById('chargerCount').value);
+
+            if (!name) {
+                alert("يرجى إدخال الاسم الكامل للمستخدم.");
+                return;
+            }
+            if (isNaN(price) || price < 0) {
+                alert("يرجى إدخال سعر صحيح.");
+                return;
+            }
+
+            if (isNaN(chargerCount)) {
+                chargerCount = 0;
+            } else if (chargerCount < 0 || chargerCount > 100) {
+                alert("خطأ: عدد شواحن الجوال يجب أن يكون قيمة بين 0 و 100.");
+                document.getElementById('chargerCount').focus();
+                return;
+            }
+
+            // التحقق الصارم: إذا كان مدفوعاً ("نعم") أو تم كتابة أ رقم تحويل، يجب أن يكون 10 أرقام تماماً
+            if (paid === 'نعم' || transferNo.length > 0) {
+                if (transferNo.length !== 10) {
+                    alert("خطأ: يجب أن يتكون رقم التحويل من 10 أرقام بالضبط (لا أقل ولا أكثر).");
+                    document.getElementById('transferNo').focus();
+                    return;
+                }
+            }
+
+            const userData = {
+                name: name,
+                chargerCount: chargerCount,
+                paid: paid,
+                transferNo: (paid === 'نعم' || transferNo.length > 0) ? transferNo : '-',
+                received: document.getElementById('received').value,
+                paymentType: document.getElementById('paymentType').value,
+                price: price
+            };
+
+            if (editIndex === -1) {
+                users.push(userData);
+                showToast("تمت إضافة المستخدم بنجاح ✅");
+            } else {
+                users[editIndex] = userData;
+                showToast("تم تحديث بيانات المستخدم بنجاح ✏️");
+                resetForm();
+            }
+
+            saveAndRefresh();
+            clearFormInputs();
+        }
+
+        function clearFormInputs() {
+            document.getElementById('name').value = '';
+            document.getElementById('price').value = '';
+            document.getElementById('transferNo').value = '';
+            document.getElementById('chargerCount').value = '';
+            document.getElementById('paid').selectedIndex = 0;
+            document.getElementById('received').selectedIndex = 0;
+            document.getElementById('paymentType').selectedIndex = 0;
+            handlePaidChange();
+        }
+
+        function resetForm() {
+            document.getElementById('editIndex').value = '-1';
+            document.getElementById('formTitle').innerHTML = '<span>➕</span> إضافة مستخدم جديد للنظام';
+            document.getElementById('submitBtn').innerText = 'حفظ البيانات';
+            document.getElementById('cancelBtn').classList.add('hidden');
+            clearFormInputs();
+        }
+
+        // تبديل حالة المدفوع مباشرة من الجدول بنقرة واحدة
+        function togglePaidStatus(index) {
+            const user = users[index];
+            if (user.paid === 'نعم') {
+                user.paid = 'لا';
+                showToast(`تم تحويل حالة (${user.name}) إلى دين ❌`);
+            } else {
+                // إذا أراد تحويله إلى مدفوع، نتحقق إن كان لديه رقم تحويل بـ 10 أرقام، وإذا لم يكن نطلب فتحه للتعديل
+                if (!user.transferNo || user.transferNo.length !== 10) {
+                    alert("لا يمكن توثيق الدفع مباشرة لعدم وجود رقم تحويل صحيح (10 أرقام). يرجى تعديل السجل وإدخال رقم التحويل.");
+                    editUser(index);
+                    return;
+                }
+                user.paid = 'نعم';
+                showToast(`تم توثيق الدفع لـ (${user.name}) بنجاح ✅`);
+            }
+            saveAndRefresh();
+        }
+
+        function toggleReceivedStatus(index) {
+            users[index].received = users[index].received === 'استلم' ? 'لم يستلم' : 'استلم';
+            saveAndRefresh();
+            showToast(`تم تغيير حالة الاستلام لـ (${users[index].name}) 📦`);
+        }
+
+        function editUser(index) {
+            const user = users[index];
+            document.getElementById('name').value = user.name;
+            document.getElementById('chargerCount').value = (user.chargerCount !== undefined && user.chargerCount !== 0) ? user.chargerCount : '';
+            document.getElementById('paid').value = user.paid;
+            handlePaidChange();
+            document.getElementById('transferNo').value = user.transferNo === '-' ? '' : (user.transferNo || '');
+            document.getElementById('received').value = user.received || 'لم يستلم';
+            document.getElementById('paymentType').value = user.paymentType;
+            document.getElementById('price').value = user.price;
+            
+            document.getElementById('editIndex').value = index;
+            document.getElementById('formTitle').innerHTML = '<span>✏️</span> تعديل بيانات المستخدم';
+            document.getElementById('submitBtn').innerText = 'تحديث البيانات';
+            document.getElementById('cancelBtn').classList.remove('hidden');
+            
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function deleteUser(index) {
+            if (confirm("هل أنت متأكد من حذف هذا السجل؟")) {
+                users.splice(index, 1);
+                saveAndRefresh();
+                showToast("تم حذف السجل بنجاح 🗑️");
+            }
+        }
+
+        function clearAllData() {
+            if (confirm("تحذير: سيتم حذف كافة البيانات المسجلة نهائياً! هل أنت متأكد؟")) {
+                users = [];
+                saveAndRefresh();
+                showToast("تم تفريغ كافة البيانات ⚠️");
+            }
+        }
+
+        function saveAndRefresh() {
+            localStorage.setItem('pos_users_v9', JSON.stringify(users));
+            renderTable();
+        }
+
+        function setFilter(filterType) {
+            currentFilter = filterType;
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.className = "filter-btn bg-slate-800 text-slate-300 border border-slate-600 px-3.5 py-2 rounded-xl text-xs font-bold hover:bg-slate-700 transition";
+            });
+            event.target.className = "filter-btn bg-blue-600 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition shadow";
+            renderTable();
+        }
+
+        function setPaymentFilter(payType) {
+            currentPaymentFilter = payType;
+            document.querySelectorAll('.pay-filter-btn').forEach(btn => {
+                btn.className = "pay-filter-btn bg-slate-800 text-slate-300 border border-slate-600 px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-slate-700 transition";
+            });
+            event.target.className = "pay-filter-btn bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition";
+            renderTable();
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('userBody');
+            tbody.innerHTML = '';
+
+            let totalRevenue = 0;
+            let totalDebt = 0;
+            let paidCount = 0;
+            let receivedCount = 0;
+
+            const searchInput = document.getElementById('searchInput').value.toLowerCase();
+
+            users.forEach((user, index) => {
+                if (user.paid === 'نعم') {
+                    totalRevenue += user.price;
+                    paidCount++;
+                } else {
+                    totalDebt += user.price;
+                }
+                if (user.received === 'استلم') {
+                    receivedCount++;
+                }
+
+                const matchesSearch = !searchInput || 
+                    user.name.toLowerCase().includes(searchInput) || 
+                    (user.transferNo && user.transferNo.toLowerCase().includes(searchInput));
+
+                if (!matchesSearch) return;
+                if (currentFilter === 'paid' && user.paid !== 'نعم') return;
+                if (currentFilter === 'debt' && user.paid !== 'لا') return;
+                if (currentFilter === 'received' && user.received !== 'استلم') return;
+                if (currentFilter === 'not_received' && user.received === 'استلم') return;
+                if (currentPaymentFilter !== 'الكل' && user.paymentType !== currentPaymentFilter) return;
+
+                const cCount = user.chargerCount !== undefined ? user.chargerCount : 0;
+                const chargerDisplay = cCount > 0 
+                    ? `<span class="bg-blue-900/60 text-blue-300 border border-blue-700/50 px-2.5 py-1 rounded-full text-xs font-bold">${cCount} شواحن</span>` 
+                    : '<span class="text-slate-500">0</span>';
+
+                const paidBadge = user.paid === 'نعم' 
+                    ? '<span class="bg-emerald-900/60 text-emerald-300 border border-emerald-700/50 px-2.5 py-1 rounded-full text-xs font-bold">✅ تم الدفع</span>' 
+                    : '<span class="bg-amber-900/60 text-amber-300 border border-amber-700/50 px-2.5 py-1 rounded-full text-xs font-bold">❌ دين (غير مدفوع)</span>';
+
+                const receivedBadge = user.received === 'استلم'
+                    ? '<span class="bg-teal-900/60 text-teal-300 border border-teal-700/50 px-2.5 py-1 rounded-full text-xs font-bold">تم الاستلام ✅</span>'
+                    : '<span class="bg-slate-700 text-slate-400 px-2.5 py-1 rounded-full text-xs font-bold">لم يستلم ⏳</span>';
+
+                const transferDisplay = user.transferNo && user.transferNo !== '-' 
+                    ? `<span class="font-mono bg-slate-900 px-2 py-1 rounded text-cyan-300 border border-slate-700 tracking-wider">${user.transferNo}</span>` 
+                    : '<span class="text-slate-500">-</span>';
+
+                const row = document.createElement('tr');
+                row.className = "hover:bg-slate-700/50 transition";
+                row.innerHTML = `
+                    <td class="p-4 border-b border-slate-700 font-semibold text-white">${user.name}</td>
+                    <td class="p-4 border-b border-slate-700">${chargerDisplay}</td>
+                    <td class="p-4 border-b border-slate-700">${paidBadge}</td>
+                    <td class="p-4 border-b border-slate-700">${transferDisplay}</td>
+                    <td class="p-4 border-b border-slate-700">${receivedBadge}</td>
+                    <td class="p-4 border-b border-slate-700"><span class="bg-slate-700 px-2.5 py-1 rounded-md text-xs font-medium text-slate-300">${user.paymentType}</span></td>
+                    <td class="p-4 border-b border-slate-700 font-bold text-white">${user.price} شيكل</td>
+                    <td class="p-4 border-b border-slate-700 text-center space-x-1 space-x-reverse no-print">
+                        <button onclick="togglePaidStatus(${index})" class="bg-purple-600 hover:bg-purple-500 text-white px-2.5 py-1 rounded-lg text-xs font-bold transition shadow-sm">
+                            ${user.paid === 'نعم' ? 'إلغاء الدفع' : 'توثيق الدفع'}
+                        </button>
+                        <button onclick="toggleReceivedStatus(${index})" class="bg-teal-600 hover:bg-teal-500 text-white px-2.5 py-1 rounded-lg text-xs font-bold transition shadow-sm">
+                            ${user.received === 'استلم' ? 'إلغاء الاستلام' : 'استلام'}
+                        </button>
+                    </td>
+                    <td class="p-4 border-b border-slate-700 text-center space-x-1 space-x-reverse no-print">
+                        <button onclick="editUser(${index})" class="bg-amber-600 hover:bg-amber-500 text-white px-3 py-1 rounded-lg text-xs font-bold transition shadow-sm">تعديل</button>
+                        <button onclick="deleteUser(${index})" class="bg-rose-600 hover:bg-rose-500 text-white px-3 py-1 rounded-lg text-xs font-bold transition shadow-sm">حذف</button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+
+            document.getElementById('totalRevenue').innerText = totalRevenue + ' شيكل';
+            document.getElementById('totalDebt').innerText = totalDebt + ' شيكل';
+            document.getElementById('totalUsers').innerText = users.length;
+            document.getElementById('receivedCount').innerText = receivedCount;
+            document.getElementById('paidCount').innerText = paidCount;
+
+            const grandTotal = totalRevenue + totalDebt;
+            const percentage = grandTotal > 0 ? Math.round((totalRevenue / grandTotal) * 100) : 0;
+            document.getElementById('collectionRate').innerText = percentage + '%';
+            document.getElementById('progressBar').style.width = percentage + '%';
+        }
+
+        function filterTable() {
+            renderTable();
+        }
+
+        function exportToExcel() {
+            if (users.length === 0) {
+                alert("لا توجد بيانات للتصدير!");
+                return;
+            }
+
+            let csv = "\uFEFFالاسم الكامل,شاحن الجوال,حالة المدفوع,رقم التحويل,حالة الاستلام,نوع الدفع,السعر\n";
+            users.forEach(u => {
+                csv += `"${u.name}",${u.chargerCount !== undefined ? u.chargerCount : 0},"${u.paid}","${u.transferNo || '-'}","${u.received || 'لم يستلم'}","${u.paymentType}",${u.price}\n`;
+            });
+
+            let blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            let url = URL.createObjectURL(blob);
+            let a = document.createElement("a");
+            a.href = url;
+            a.download = "POS_Advanced_Paid_Data.csv";
+            a.click();
+        }
+
+        function printReport() {
+            window.print();
+        }
+    </script>
+</body>
+</html>
